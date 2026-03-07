@@ -1,5 +1,63 @@
 ## Playwright MCP
 
+> Fork note: this fork is maintained at `toxicwind/playwright-mcp` for a headed rebrowser workflow.
+> The current direction is: keep upstream compatibility, but optimize local operator flows around:
+> - persistent headed Chromium sessions
+> - CDP attach to already-running browser windows
+> - rebrowser-friendly launch and session reuse
+> - Codex/Apex/OpenClaw operator workflows
+>
+> Upstream remains the source of truth for the base server. This fork adds local operator ergonomics and auto-syncs from upstream `main`.
+
+### Fork-specific workflow
+
+This fork is intended to work well with a live headed browser instead of always booting a fresh isolated instance.
+
+Primary local model:
+
+1. Start a headed rebrowser/Chromium session with remote debugging enabled.
+2. Point Playwright MCP at that browser with `--cdp-endpoint`.
+3. Reuse the real logged-in profile and tabs instead of reauthing inside a throwaway automation context.
+
+Example:
+
+```bash
+npx @playwright/mcp@latest \
+  --cdp-endpoint http://127.0.0.1:46677 \
+  --caps vision,devtools
+```
+
+Codex config example:
+
+```toml
+[mcp_servers.playwright]
+command = "npx"
+args = [
+  "-y",
+  "@playwright/mcp@latest",
+  "--cdp-endpoint",
+  "http://127.0.0.1:46677",
+  "--caps",
+  "vision,devtools"
+]
+```
+
+If you prefer the browser-extension bridge instead of CDP, the upstream extension mode remains supported. This fork does not remove that path.
+
+### Upstream sync policy
+
+This repository includes a GitHub Actions workflow that keeps `main` aligned with `microsoft/playwright-mcp` by fast-forwarding from upstream when possible.
+
+Manual sync:
+
+```bash
+git remote add upstream https://github.com/microsoft/playwright-mcp.git
+git fetch upstream
+git checkout main
+git merge --ff-only upstream/main
+git push origin main
+```
+
 A Model Context Protocol (MCP) server that provides browser automation capabilities using [Playwright](https://playwright.dev). This server enables LLMs to interact with web pages through structured accessibility snapshots, bypassing the need for screenshots or visually-tuned models.
 
 ### Playwright MCP vs Playwright CLI

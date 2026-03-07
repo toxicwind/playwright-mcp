@@ -1,0 +1,37 @@
+name: Upstream Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream
+        run: |
+          git remote add upstream https://github.com/microsoft/playwright-mcp.git || true
+          git fetch upstream main --tags
+
+      - name: Fast-forward main from upstream
+        run: |
+          git checkout main
+          git merge --ff-only upstream/main
+
+      - name: Push sync
+        run: |
+          git push origin main
