@@ -76,7 +76,7 @@ This package provides MCP interface into Playwright. If you are using a **coding
 
 ### Requirements
 - Node.js 18 or newer
-- VS Code, Cursor, Windsurf, Claude Desktop, Goose or any other MCP client
+- VS Code, Cursor, Windsurf, Claude Desktop, Goose, Junie or any other MCP client
 
 <!--
 // Generate using:
@@ -296,7 +296,38 @@ Go to `Advanced settings` -> `Extensions` -> `Add custom extension`. Name to you
 </details>
 
 <details>
+<summary>Junie</summary>
+
+To add the Playwright MCP server in Junie CLI:
+
+1. Type `/mcp`
+2. Press `Ctrl+A` to add a new MCP server
+3. Select **Playwright** from the list
+
+Alternatively, add to `.junie/mcp/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "Playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
+    }
+  }
+}
+```
+
+For more information, see the [Junie MCP configuration documentation](https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html).
+
+</details>
+
+<details>
 <summary>Kiro</summary>
+
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=playwright&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22%40playwright%2Fmcp%40latest%22%5D%7D)
 
 Follow the MCP Servers [documentation](https://kiro.dev/docs/mcp/). For example in `.kiro/settings/mcp.json`:
 
@@ -428,6 +459,7 @@ Playwright MCP server supports following arguments. They can be provided in the 
 | --device <device> | device to emulate, for example: "iPhone 15"<br>*env* `PLAYWRIGHT_MCP_DEVICE` |
 | --executable-path <path> | path to the browser executable.<br>*env* `PLAYWRIGHT_MCP_EXECUTABLE_PATH` |
 | --extension | Connect to a running browser instance (Edge/Chrome only). Requires the "Playwright MCP Bridge" browser extension to be installed.<br>*env* `PLAYWRIGHT_MCP_EXTENSION` |
+| --endpoint <endpoint> | Bound browser endpoint to connect to.<br>*env* `PLAYWRIGHT_MCP_ENDPOINT` |
 | --grant-permissions <permissions...> | List of permissions to grant to the browser context, for example "geolocation", "clipboard-read", "clipboard-write".<br>*env* `PLAYWRIGHT_MCP_GRANT_PERMISSIONS` |
 | --headless | run browser in headless mode, headed by default<br>*env* `PLAYWRIGHT_MCP_HEADLESS` |
 | --host <host> | host to bind server to. Default is localhost. Use 0.0.0.0 to bind to all interfaces.<br>*env* `PLAYWRIGHT_MCP_HOST` |
@@ -444,11 +476,9 @@ Playwright MCP server supports following arguments. They can be provided in the 
 | --proxy-server <proxy> | specify proxy server, for example "http://myproxy:3128" or "socks5://myproxy:8080"<br>*env* `PLAYWRIGHT_MCP_PROXY_SERVER` |
 | --sandbox | enable the sandbox for all process types that are normally not sandboxed.<br>*env* `PLAYWRIGHT_MCP_SANDBOX` |
 | --save-session | Whether to save the Playwright MCP session into the output directory.<br>*env* `PLAYWRIGHT_MCP_SAVE_SESSION` |
-| --save-trace | Whether to save the Playwright Trace of the session into the output directory.<br>*env* `PLAYWRIGHT_MCP_SAVE_TRACE` |
-| --save-video <size> | Whether to save the video of the session into the output directory. For example "--save-video=800x600"<br>*env* `PLAYWRIGHT_MCP_SAVE_VIDEO` |
 | --secrets <path> | path to a file containing secrets in the dotenv format<br>*env* `PLAYWRIGHT_MCP_SECRETS` |
 | --shared-browser-context | reuse the same browser context between all connected HTTP clients.<br>*env* `PLAYWRIGHT_MCP_SHARED_BROWSER_CONTEXT` |
-| --snapshot-mode <mode> | when taking snapshots for responses, specifies the mode to use. Can be "incremental", "full", or "none". Default is incremental.<br>*env* `PLAYWRIGHT_MCP_SNAPSHOT_MODE` |
+| --snapshot-mode <mode> | when taking snapshots for responses, specifies the mode to use. Can be "full" or "none". Default is "full".<br>*env* `PLAYWRIGHT_MCP_SNAPSHOT_MODE` |
 | --storage-state <path> | path to the storage state file for isolated sessions.<br>*env* `PLAYWRIGHT_MCP_STORAGE_STATE` |
 | --test-id-attribute <attribute> | specify the attribute to use for test ids, defaults to "data-testid"<br>*env* `PLAYWRIGHT_MCP_TEST_ID_ATTRIBUTE` |
 | --timeout-action <timeout> | specify action timeout in milliseconds, defaults to 5000ms<br>*env* `PLAYWRIGHT_MCP_TIMEOUT_ACTION` |
@@ -470,14 +500,16 @@ Persistent profile is located at the following locations and you can override it
 
 ```bash
 # Windows
-%USERPROFILE%\AppData\Local\ms-playwright\mcp-{channel}-profile
+%USERPROFILE%\AppData\Local\ms-playwright\mcp-{channel}-{workspace-hash}
 
 # macOS
-- ~/Library/Caches/ms-playwright/mcp-{channel}-profile
+- ~/Library/Caches/ms-playwright/mcp-{channel}-{workspace-hash}
 
 # Linux
-- ~/.cache/ms-playwright/mcp-{channel}-profile
+- ~/.cache/ms-playwright/mcp-{channel}-{workspace-hash}
 ```
+
+`{workspace-hash}` is derived from the MCP client's workspace root, so different projects get separate profiles automatically.
 
 **Isolated**
 
@@ -657,27 +689,14 @@ npx @playwright/mcp@latest --config path/to/config.json
   saveSession?: boolean;
 
   /**
-   * Whether to save the Playwright trace of the session into the output directory.
-   */
-  saveTrace?: boolean;
-
-  /**
-   * If specified, saves the Playwright video of the session into the output directory.
-   */
-  saveVideo?: {
-    width: number;
-    height: number;
-  };
-
-  /**
    * Reuse the same browser context between all connected HTTP clients.
    */
   sharedBrowserContext?: boolean;
 
   /**
-   * Secrets are used to prevent LLM from getting sensitive data while
-   * automating scenarios such as authentication.
-   * Prefer the browser.contextOptions.storageState over secrets file as a more secure alternative.
+   * Secrets are used to replace matching plain text in the tool responses to prevent the LLM
+   * from accidentally getting sensitive data. It is a convenience and not a security feature,
+   * make sure to always examine information coming in and from the tool on the client.
    */
   secrets?: Record<string, string>;
 
@@ -685,11 +704,6 @@ npx @playwright/mcp@latest --config path/to/config.json
    * The directory to save output files.
    */
   outputDir?: string;
-
-  /**
-   * Whether to save snapshots, console messages, network logs and other session logs to a file or to the standard output. Defaults to "stdout".
-   */
-  outputMode?: 'file' | 'stdout';
 
   console?: {
     /**
@@ -733,6 +747,11 @@ npx @playwright/mcp@latest --config path/to/config.json
      * Configures default navigation timeout: https://playwright.dev/docs/api/class-page#page-set-default-navigation-timeout. Defaults to 60000ms.
      */
     navigation?: number;
+
+    /**
+     * Configures default expect timeout: https://playwright.dev/docs/test-timeouts#expect-timeout. Defaults to 5000ms.
+     */
+    expect?: number;
   };
 
   /**
@@ -744,12 +763,14 @@ npx @playwright/mcp@latest --config path/to/config.json
     /**
      * When taking snapshots for responses, specifies the mode to use.
      */
-    mode?: 'incremental' | 'full' | 'none';
+    mode?: 'full' | 'none';
   };
 
   /**
-   * Whether to allow file uploads from anywhere on the file system.
-   * By default (false), file uploads are restricted to paths within the MCP roots only.
+   * allowUnrestrictedFileAccess acts as a guardrail to prevent the LLM from accidentally
+   * wandering outside its intended workspace. It is a convenience defense to catch unintended
+   * file access, not a secure boundary; a deliberate attempt to reach other directories can be
+   * easily worked around, so always rely on client-level permissions for true security.
    */
   allowUnrestrictedFileAccess?: boolean;
 
@@ -862,6 +883,7 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
     - `ref` (string): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available
     - `doubleClick` (boolean, optional): Whether to perform a double click instead of a single click
     - `button` (string, optional): Button to click, defaults to left
     - `modifiers` (array, optional): Modifier keys to press
@@ -882,6 +904,7 @@ http.createServer(async (req, res) => {
   - Description: Returns all console messages
   - Parameters:
     - `level` (string): Level of the console messages to return. Each level includes the messages of more severe levels. Defaults to "info".
+    - `all` (boolean, optional): Return all console messages since the beginning of the session, not just since the last navigation. Defaults to false.
     - `filename` (string, optional): Filename to save the console messages to. If not provided, messages are returned as text.
   - Read-only: **true**
 
@@ -893,8 +916,10 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `startElement` (string): Human-readable source element description used to obtain the permission to interact with the element
     - `startRef` (string): Exact source element reference from the page snapshot
+    - `startSelector` (string, optional): CSS or role selector for the source element, when ref is not available
     - `endElement` (string): Human-readable target element description used to obtain the permission to interact with the element
     - `endRef` (string): Exact target element reference from the page snapshot
+    - `endSelector` (string, optional): CSS or role selector for the target element, when ref is not available
   - Read-only: **false**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -906,6 +931,8 @@ http.createServer(async (req, res) => {
     - `function` (string): () => { /* code */ } or (element) => { /* code */ } when element is provided
     - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
     - `ref` (string, optional): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available.
+    - `filename` (string, optional): Filename to save the result to. If not provided, result is returned as text.
   - Read-only: **false**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -944,6 +971,7 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
     - `ref` (string): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available
   - Read-only: **false**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -969,7 +997,10 @@ http.createServer(async (req, res) => {
   - Title: List network requests
   - Description: Returns all network requests since loading the page
   - Parameters:
-    - `includeStatic` (boolean): Whether to include successful static resources like images, fonts, scripts, etc. Defaults to false.
+    - `static` (boolean): Whether to include successful static resources like images, fonts, scripts, etc. Defaults to false.
+    - `requestBody` (boolean): Whether to include request body. Defaults to false.
+    - `requestHeaders` (boolean): Whether to include request headers. Defaults to false.
+    - `filter` (string, optional): Only return requests whose URL matches this regexp (e.g. "/api/.*user").
     - `filename` (string, optional): Filename to save the network requests to. If not provided, requests are returned as text.
   - Read-only: **true**
 
@@ -998,7 +1029,8 @@ http.createServer(async (req, res) => {
   - Title: Run Playwright code
   - Description: Run Playwright code snippet
   - Parameters:
-    - `code` (string): A JavaScript function containing Playwright code to execute. It will be invoked with a single argument, page, which you can use for any page interaction. For example: `async (page) => { await page.getByRole('button', { name: 'Submit' }).click(); return await page.title(); }`
+    - `code` (string, optional): A JavaScript function containing Playwright code to execute. It will be invoked with a single argument, page, which you can use for any page interaction. For example: `async (page) => { await page.getByRole('button', { name: 'Submit' }).click(); return await page.title(); }`
+    - `filename` (string, optional): Load code from the specified file. If both code and filename are provided, code will be ignored.
   - Read-only: **false**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -1009,6 +1041,7 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
     - `ref` (string): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available
     - `values` (array): Array of values to select in the dropdown. This can be a single value or multiple values.
   - Read-only: **false**
 
@@ -1019,6 +1052,9 @@ http.createServer(async (req, res) => {
   - Description: Capture accessibility snapshot of the current page, this is better than screenshot
   - Parameters:
     - `filename` (string, optional): Save snapshot to markdown file instead of returning it in the response.
+    - `ref` (string, optional): Element reference from the previous page snapshot to capture a partial snapshot instead of the whole page
+    - `selector` (string, optional): Element selector of the root element to capture a partial snapshot instead of the whole page
+    - `depth` (number, optional): Limit the depth of the snapshot tree
   - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -1031,6 +1067,7 @@ http.createServer(async (req, res) => {
     - `filename` (string, optional): File name to save the screenshot to. Defaults to `page-{timestamp}.{png|jpeg}` if not specified. Prefer relative file names to stay within the output directory.
     - `element` (string, optional): Human-readable element description used to obtain permission to screenshot the element. If not provided, the screenshot will be taken of viewport. If element is provided, ref must be provided too.
     - `ref` (string, optional): Exact target element reference from the page snapshot. If not provided, the screenshot will be taken of viewport. If ref is provided, element must be provided too.
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available.
     - `fullPage` (boolean, optional): When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Cannot be used with element screenshots.
   - Read-only: **true**
 
@@ -1042,6 +1079,7 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
     - `ref` (string): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available
     - `text` (string): Text to type into the element
     - `submit` (boolean, optional): Whether to submit entered text (press Enter after)
     - `slowly` (boolean, optional): Whether to type one character at a time. Useful for triggering key handlers in the page. By default entire text is filled in at once.
@@ -1071,6 +1109,7 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `action` (string): Operation to perform
     - `index` (number, optional): Tab index, used for close/select. If omitted for close, current tab is closed.
+    - `url` (string, optional): URL to navigate to in the new tab, used for new.
   - Read-only: **false**
 
 </details>
@@ -1078,13 +1117,286 @@ http.createServer(async (req, res) => {
 <details>
 <summary><b>Browser installation</b></summary>
 
+</details>
+
+<details>
+<summary><b>Configuration (opt-in via --caps=config)</b></summary>
+
 <!-- NOTE: This has been generated via update-readme.js -->
 
-- **browser_install**
-  - Title: Install the browser specified in the config
-  - Description: Install the browser specified in the config. Call this if you get an error about the browser not being installed.
+- **browser_get_config**
+  - Title: Get config
+  - Description: Get the final resolved config after merging CLI options, environment variables and config file.
+  - Parameters: None
+  - Read-only: **true**
+
+</details>
+
+<details>
+<summary><b>Network (opt-in via --caps=network)</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_network_state_set**
+  - Title: Set network state
+  - Description: Sets the browser network state to online or offline. When offline, all network requests will fail.
+  - Parameters:
+    - `state` (string): Set to "offline" to simulate offline mode, "online" to restore network connectivity
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_route**
+  - Title: Mock network requests
+  - Description: Set up a route to mock network requests matching a URL pattern
+  - Parameters:
+    - `pattern` (string): URL pattern to match (e.g., "**/api/users", "**/*.{png,jpg}")
+    - `status` (number, optional): HTTP status code to return (default: 200)
+    - `body` (string, optional): Response body (text or JSON string)
+    - `contentType` (string, optional): Content-Type header (e.g., "application/json", "text/html")
+    - `headers` (array, optional): Headers to add in "Name: Value" format
+    - `removeHeaders` (string, optional): Comma-separated list of header names to remove from request
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_route_list**
+  - Title: List network routes
+  - Description: List all active network routes
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_unroute**
+  - Title: Remove network routes
+  - Description: Remove network routes matching a pattern (or all routes if no pattern specified)
+  - Parameters:
+    - `pattern` (string, optional): URL pattern to unroute (omit to remove all routes)
+  - Read-only: **false**
+
+</details>
+
+<details>
+<summary><b>Storage (opt-in via --caps=storage)</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_cookie_clear**
+  - Title: Clear cookies
+  - Description: Clear all cookies
   - Parameters: None
   - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_cookie_delete**
+  - Title: Delete cookie
+  - Description: Delete a specific cookie
+  - Parameters:
+    - `name` (string): Cookie name to delete
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_cookie_get**
+  - Title: Get cookie
+  - Description: Get a specific cookie by name
+  - Parameters:
+    - `name` (string): Cookie name to get
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_cookie_list**
+  - Title: List cookies
+  - Description: List all cookies (optionally filtered by domain/path)
+  - Parameters:
+    - `domain` (string, optional): Filter cookies by domain
+    - `path` (string, optional): Filter cookies by path
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_cookie_set**
+  - Title: Set cookie
+  - Description: Set a cookie with optional flags (domain, path, expires, httpOnly, secure, sameSite)
+  - Parameters:
+    - `name` (string): Cookie name
+    - `value` (string): Cookie value
+    - `domain` (string, optional): Cookie domain
+    - `path` (string, optional): Cookie path
+    - `expires` (number, optional): Cookie expiration as Unix timestamp
+    - `httpOnly` (boolean, optional): Whether the cookie is HTTP only
+    - `secure` (boolean, optional): Whether the cookie is secure
+    - `sameSite` (string, optional): Cookie SameSite attribute
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_localstorage_clear**
+  - Title: Clear localStorage
+  - Description: Clear all localStorage
+  - Parameters: None
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_localstorage_delete**
+  - Title: Delete localStorage item
+  - Description: Delete a localStorage item
+  - Parameters:
+    - `key` (string): Key to delete
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_localstorage_get**
+  - Title: Get localStorage item
+  - Description: Get a localStorage item by key
+  - Parameters:
+    - `key` (string): Key to get
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_localstorage_list**
+  - Title: List localStorage
+  - Description: List all localStorage key-value pairs
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_localstorage_set**
+  - Title: Set localStorage item
+  - Description: Set a localStorage item
+  - Parameters:
+    - `key` (string): Key to set
+    - `value` (string): Value to set
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_sessionstorage_clear**
+  - Title: Clear sessionStorage
+  - Description: Clear all sessionStorage
+  - Parameters: None
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_sessionstorage_delete**
+  - Title: Delete sessionStorage item
+  - Description: Delete a sessionStorage item
+  - Parameters:
+    - `key` (string): Key to delete
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_sessionstorage_get**
+  - Title: Get sessionStorage item
+  - Description: Get a sessionStorage item by key
+  - Parameters:
+    - `key` (string): Key to get
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_sessionstorage_list**
+  - Title: List sessionStorage
+  - Description: List all sessionStorage key-value pairs
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_sessionstorage_set**
+  - Title: Set sessionStorage item
+  - Description: Set a sessionStorage item
+  - Parameters:
+    - `key` (string): Key to set
+    - `value` (string): Value to set
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_set_storage_state**
+  - Title: Restore storage state
+  - Description: Restore storage state (cookies, local storage) from a file. This clears existing cookies and local storage before restoring.
+  - Parameters:
+    - `filename` (string): Path to the storage state file to restore from
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_storage_state**
+  - Title: Save storage state
+  - Description: Save storage state (cookies, local storage) to a file for later reuse
+  - Parameters:
+    - `filename` (string, optional): File name to save the storage state to. Defaults to `storage-state-{timestamp}.json` if not specified.
+  - Read-only: **true**
+
+</details>
+
+<details>
+<summary><b>DevTools (opt-in via --caps=devtools)</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_resume**
+  - Title: Resume paused script execution
+  - Description: Resume script execution after it was paused. When called with step set to true, execution will pause again before the next action.
+  - Parameters:
+    - `step` (boolean, optional): When true, execution will pause again before the next action, allowing step-by-step debugging.
+    - `location` (string, optional): Pause execution at a specific <file>:<line>, e.g. "example.spec.ts:42".
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_start_tracing**
+  - Title: Start tracing
+  - Description: Start trace recording
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_start_video**
+  - Title: Start video
+  - Description: Start video recording
+  - Parameters:
+    - `filename` (string, optional): Filename to save the video.
+    - `size` (object, optional): Video size
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_stop_tracing**
+  - Title: Stop tracing
+  - Description: Stop trace recording
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_stop_video**
+  - Title: Stop video
+  - Description: Stop video recording
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_video_chapter**
+  - Title: Video chapter
+  - Description: Add a chapter marker to the video recording. Shows a full-screen chapter card with blurred backdrop.
+  - Parameters:
+    - `title` (string): Chapter title
+    - `description` (string, optional): Chapter description
+    - `duration` (number, optional): Duration in milliseconds to show the chapter card
+  - Read-only: **true**
 
 </details>
 
@@ -1095,10 +1407,13 @@ http.createServer(async (req, res) => {
 
 - **browser_mouse_click_xy**
   - Title: Click
-  - Description: Click left mouse button at a given position
+  - Description: Click mouse button at a given position
   - Parameters:
     - `x` (number): X coordinate
     - `y` (number): Y coordinate
+    - `button` (string, optional): Button to click, defaults to left
+    - `clickCount` (number, optional): Number of clicks, defaults to 1
+    - `delay` (number, optional): Time to wait between mouse down and mouse up in milliseconds, defaults to 0
   - Read-only: **false**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -1178,6 +1493,7 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
     - `ref` (string): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available
   - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -1198,6 +1514,7 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `element` (string): Human-readable list description
     - `ref` (string): Exact target element reference that points to the list
+    - `selector` (string, optional): CSS or role selector for the target list, when "ref" is not available.
     - `items` (array): Items to verify
   - Read-only: **false**
 
@@ -1218,14 +1535,10 @@ http.createServer(async (req, res) => {
   - Parameters:
     - `type` (string): Type of the element
     - `element` (string): Human-readable element description
-    - `ref` (string): Exact target element reference that points to the element
+    - `ref` (string): Exact target element reference from the page snapshot
+    - `selector` (string, optional): CSS or role selector for the target element, when "ref" is not available
     - `value` (string): Value to verify. For checkbox, use "true" or "false".
   - Read-only: **false**
-
-</details>
-
-<details>
-<summary><b>Tracing (opt-in via --caps=tracing)</b></summary>
 
 </details>
 
