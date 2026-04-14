@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Copyright (c) Microsoft Corporation.
  *
@@ -14,6 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import child_process from 'child_process';
+import path from 'path';
+import { test, expect } from './fixtures';
 
-const { tools } = require('playwright-core/lib/coreBundle');
-module.exports = { createConnection: tools.createConnection };
+const cliPath = path.resolve(__dirname, '..', 'cli.js');
+
+test('install-browser --help', async () => {
+  const output = child_process.execSync(`node ${cliPath} install-browser --help`, { encoding: 'utf-8' });
+  expect(output).toContain('install');
+});
