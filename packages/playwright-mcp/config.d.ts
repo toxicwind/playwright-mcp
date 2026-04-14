@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type * as playwright from 'playwright';
+import type * as playwright from '../../..';
 
 export type ToolCapability =
   'config' |
@@ -138,27 +138,14 @@ export type Config = {
   saveSession?: boolean;
 
   /**
-   * Whether to save the Playwright trace of the session into the output directory.
-   */
-  saveTrace?: boolean;
-
-  /**
-   * If specified, saves the Playwright video of the session into the output directory.
-   */
-  saveVideo?: {
-    width: number;
-    height: number;
-  };
-
-  /**
    * Reuse the same browser context between all connected HTTP clients.
    */
   sharedBrowserContext?: boolean;
 
   /**
-   * Secrets are used to prevent LLM from getting sensitive data while
-   * automating scenarios such as authentication.
-   * Prefer the browser.contextOptions.storageState over secrets file as a more secure alternative.
+   * Secrets are used to replace matching plain text in the tool responses to prevent the LLM
+   * from accidentally getting sensitive data. It is a convenience and not a security feature,
+   * make sure to always examine information coming in and from the tool on the client.
    */
   secrets?: Record<string, string>;
 
@@ -166,11 +153,6 @@ export type Config = {
    * The directory to save output files.
    */
   outputDir?: string;
-
-  /**
-   * Whether to save snapshots, console messages, network logs and other session logs to a file or to the standard output. Defaults to "stdout".
-   */
-  outputMode?: 'file' | 'stdout';
 
   console?: {
     /**
@@ -214,6 +196,11 @@ export type Config = {
      * Configures default navigation timeout: https://playwright.dev/docs/api/class-page#page-set-default-navigation-timeout. Defaults to 60000ms.
      */
     navigation?: number;
+
+    /**
+     * Configures default expect timeout: https://playwright.dev/docs/test-timeouts#expect-timeout. Defaults to 5000ms.
+     */
+    expect?: number;
   };
 
   /**
@@ -225,12 +212,14 @@ export type Config = {
     /**
      * When taking snapshots for responses, specifies the mode to use.
      */
-    mode?: 'incremental' | 'full' | 'none';
+    mode?: 'full' | 'none';
   };
 
   /**
-   * Whether to allow file uploads from anywhere on the file system.
-   * By default (false), file uploads are restricted to paths within the MCP roots only.
+   * allowUnrestrictedFileAccess acts as a guardrail to prevent the LLM from accidentally
+   * wandering outside its intended workspace. It is a convenience defense to catch unintended
+   * file access, not a secure boundary; a deliberate attempt to reach other directories can be
+   * easily worked around, so always rely on client-level permissions for true security.
    */
   allowUnrestrictedFileAccess?: boolean;
 
