@@ -20,29 +20,47 @@ const fs = require('fs')
 const path = require('path')
 const { execSync } = require('child_process');
 
-const { browserTools } = require('playwright/lib/mcp/browser/tools');
+const { tools } = require('playwright-core/lib/coreBundle');
 
-const capabilities = {
+const capabilities = /** @type {Record<string, string>} */ ({
   'core-navigation': 'Core automation',
   'core': 'Core automation',
   'core-tabs': 'Tab management',
   'core-input': 'Core automation',
   'core-install': 'Browser installation',
-  'vision': 'Coordinate-based (opt-in via --caps=vision)',
-  'pdf': 'PDF generation (opt-in via --caps=pdf)',
-  'testing': 'Test assertions (opt-in via --caps=testing)',
-  'tracing': 'Tracing (opt-in via --caps=tracing)',
-};
+  'config': 'Configuration',
+  'network': 'Network',
+  'storage': 'Storage',
+  'devtools': 'DevTools',
+  'vision': 'Coordinate-based',
+  'pdf': 'PDF generation',
+  'testing': 'Test assertions',
+});
+
+const knownCapabilities = new Set(Object.keys(capabilities));
+const unknownCapabilities = [...new Set(tools.browserTools.map(tool => tool.capability))].filter(cap => !knownCapabilities.has(cap));
+if (unknownCapabilities.length)
+  throw new Error(`Unknown tool capabilities: ${unknownCapabilities.join(', ')}. Please update the capabilities map in ${path.basename(__filename)}.`);
 
 /** @type {Record<string, any[]>} */
 const toolsByCapability = {};
-for (const [capability, title] of Object.entries(capabilities)) {
-  let tools = browserTools.filter(tool => tool.capability === capability && !tool.skillOnly);
-  tools = (toolsByCapability[title] || []).concat(tools);
-  toolsByCapability[title] = tools;
+for (const capability of Object.keys(capabilities)) {
+  const title = capabilityTitle(capability);
+  let filteredTools = tools.browserTools.filter(tool => tool.capability === capability && !tool.skillOnly);
+  filteredTools = (toolsByCapability[title] || []).concat(filteredTools);
+  toolsByCapability[title] = filteredTools;
 }
 for (const [, tools] of Object.entries(toolsByCapability))
   tools.sort((a, b) => a.schema.name.localeCompare(b.schema.name));
+
+/**
+ * @param {string} capability
+ * @returns {string}
+ */
+function capabilityTitle(capability) {
+  const title = capabilities[capability];
+  return capability.startsWith('core') ? title : `${title} (opt-in via --caps=${capability})`;
+}
 
 /**
  * @param {any} tool
