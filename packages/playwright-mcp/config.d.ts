@@ -72,6 +72,18 @@ export type Config = {
     cdpEndpoint?: string;
 
     /**
+     * Remote Playwright browser server endpoint (from launchServer). Excellent for long-lived
+     * headed Firefox sessions you control from the agent ("CDP-like" for Firefox).
+     */
+    remoteEndpoint?: string;
+
+    /**
+     * Raw WebDriver BiDi (or compatible) WS endpoint. Use when you have a stock Firefox
+     * listening on a BiDi port. Prefer --remote-endpoint for most Firefox use cases.
+     */
+    bidiEndpoint?: string;
+
+    /**
      * CDP headers to send with the connect request.
      */
     cdpHeaders?: Record<string, string>;

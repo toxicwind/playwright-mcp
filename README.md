@@ -44,6 +44,56 @@ args = [
 
 If you prefer the browser-extension bridge instead of CDP, the upstream extension mode remains supported. This fork does not remove that path.
 
+### Firefox live control ("CDP-like" for Firefox)
+
+Chromium has the beautiful `--cdp-endpoint` story for attaching to your already-running browser.
+
+Firefox does **not** have a CDP equivalent (CDP is Chromium-only). However this fork adds first-class support for the practical equivalent:
+
+**Recommended pattern (most reliable "live Firefox" experience):**
+
+1. Start a dedicated controllable headed Firefox (one time or per session):
+   ```bash
+   cd sovereign-maximal/mcp-forks/playwright-mcp
+   node launch-firefox-remote.js
+   ```
+   This prints a `ws://...` endpoint and keeps a real headed Firefox window open.
+
+2. Point the MCP server at it (in a separate terminal or via your MCP client config):
+   ```bash
+   PLAYWRIGHT_MCP_BROWSER=firefox \
+   PLAYWRIGHT_MCP_REMOTE_ENDPOINT=ws://127.0.0.1:PORT \
+     node sovereign-launch.js
+   ```
+
+   Or with flags:
+   ```bash
+   node sovereign-launch.js \
+     --browser firefox \
+     --remote-endpoint ws://127.0.0.1:PORT
+   ```
+
+3. (Optional but powerful) Use a persistent profile you pre-logged into GitHub / your tools:
+   - Close your normal Firefox (or use a different profile).
+   - Point `launch-firefox-remote.js` at your real profile dir (edit the script or set `FIREFOX_AGENT_PROFILE`).
+   - The agent now sees your real cookies, logins, tabs, extensions, etc.
+
+You can also use `--bidi-endpoint` for raw WebDriver BiDi endpoints if you have a stock Firefox listening on one (advanced, less reliable than the `launchServer` path above).
+
+In your `.grok/config.toml` or Codex/etc config you can now do:
+
+```toml
+[mcp_servers.sovereign-playwright-fork]
+command = "node"
+args = [
+  "/home/toxic/sovereign-maximal/mcp-forks/playwright-mcp/sovereign-launch.js",
+  "--browser", "firefox",
+  "--remote-endpoint", "ws://127.0.0.1:THE_PORT"
+]
+```
+
+This is the closest thing to "live control my currently running Firefox" that exists in the Playwright ecosystem today.
+
 ### Upstream sync policy
 
 This repository includes a GitHub Actions workflow that keeps `main` aligned with `microsoft/playwright-mcp` by fast-forwarding from upstream when possible.
