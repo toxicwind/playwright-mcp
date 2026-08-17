@@ -9,6 +9,11 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  UPSTREAM_OWNER: microsoft
+  UPSTREAM_REPO: playwright-mcp
+  UPSTREAM_BRANCH: main
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -17,62 +22,43 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Discover upstream
-        id: upstream
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = await github.rest.repos.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            const parent = repo.data.parent;
-            core.setOutput('is_fork', String(!!parent));
-            core.setOutput('default_branch', repo.data.default_branch);
-            core.setOutput('parent_clone_url', parent?.clone_url || '');
-            core.setOutput('parent_full_name', parent?.full_name || '');
-            core.notice(parent
-              ? `upstream=${parent.full_name} branch=${parent.default_branch}`
-              : 'repository is not a fork; nothing to sync');
-
-      - name: Skip non-forks
-        if: steps.upstream.outputs.is_fork != 'true'
-        run: echo 'Not a fork, exiting cleanly.'
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure git
-        if: steps.upstream.outputs.is_fork == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Add upstream remote
-        if: steps.upstream.outputs.is_fork == 'true'
         run: |
           git remote remove upstream || true
-          git remote add upstream "${{ steps.upstream.outputs.parent_clone_url }}"
-          git fetch upstream "${{ steps.upstream.outputs.default_branch }}" --tags
+          git remote add upstream "https://github.com/${{ env.UPSTREAM_OWNER }}/${{ env.UPSTREAM_REPO }}.git"
+          git fetch upstream "${{ env.UPSTREAM_BRANCH }}" --tags
 
       - name: Fast-forward if possible
-        if: steps.upstream.outputs.is_fork == 'true'
         id: ff
         run: |
-          branch="${{ steps.upstream.outputs.default_branch }}"
+          branch="${{ github.event.repository.default_branch }}"
           git checkout "$branch"
-          if git merge --ff-only "upstream/$branch"; then
+          if git merge --ff-only "upstream/${{ env.UPSTREAM_BRANCH }}"; then
             echo "mode=ff" >> "$GITHUB_OUTPUT"
             git push origin "$branch"
+            echo "Fast-forwarded successfully"
           else
             echo "mode=pr" >> "$GITHUB_OUTPUT"
+            echo "Need PR - diverged from upstream"
           fi
 
       - name: Prepare sync branch
         if: steps.ff.outputs.mode == 'pr'
         run: |
-          branch="${{ steps.upstream.outputs.default_branch }}"
-          sync_branch="upstream-sync/${branch}-$(date +%Y%m%d%H%M%S)"
+          branch="${{ github.event.repository.default_branch }}"
+          sync_branch="upstream-sync/${{ env.UPSTREAM_BRANCH }}-$(date +%Y%m%d%H%M%S)"
           git checkout -B "$sync_branch" "origin/$branch"
-          git merge --no-edit "upstream/$branch"
+          git merge --no-edit "upstream/${{ env.UPSTREAM_BRANCH }}" || {
+            echo "Merge failed - conflicts exist"
+            exit 1
+          }
           git push origin "$sync_branch"
           echo "SYNC_BRANCH=$sync_branch" >> "$GITHUB_ENV"
 
@@ -82,27 +68,33 @@ jobs:
         with:
           script: |
             const head = process.env.SYNC_BRANCH;
-            const base = '${{ steps.upstream.outputs.default_branch }}';
+            const base = '${{ github.event.repository.default_branch }}';
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const existing = await github.rest.pulls.list({ owner, repo, state: 'open', head: `${owner}:${head}`, base });
+            const upstreamFull = '${{ env.UPSTREAM_OWNER }}/${{ env.UPSTREAM_REPO }}';
+            
+            const existing = await github.rest.pulls.list({
+              owner, repo, state: 'open',
+              head: `${owner}:${head}`, base
+            });
+            
             if (existing.data.length) {
               core.notice(`PR already exists: #${existing.data[0].number}`);
               return;
             }
+            
             const pr = await github.rest.pulls.create({
-              owner,
-              repo,
-              title: `Sync upstream ${'${{ steps.upstream.outputs.parent_full_name }}'} into ${base}`,
+              owner, repo,
+              title: `Sync upstream ${upstreamFull} into ${base}`,
               head,
               base,
               body: [
                 'Automated upstream sync could not be fast-forwarded cleanly.',
                 '',
-                `Upstream: ${'${{ steps.upstream.outputs.parent_full_name }}'}`,
+                `Upstream: ${upstreamFull}`,
                 `Base branch: ${base}`,
                 '',
                 'This PR was opened automatically by the upstream sync workflow.'
               ].join('\n')
             });
-            core.notice(`Created PR #${pr.data.number}`);
+            core.notice(`Created PR #${pr.data.number}: ${pr.data.html_url}`);
