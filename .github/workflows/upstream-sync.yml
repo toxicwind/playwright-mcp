@@ -50,20 +50,24 @@ jobs:
           fi
 
       - name: Prepare sync branch
+        id: prep
         if: steps.ff.outputs.mode == 'pr'
         run: |
           branch="${{ github.event.repository.default_branch }}"
           sync_branch="upstream-sync/${{ env.UPSTREAM_BRANCH }}-$(date +%Y%m%d%H%M%S)"
           git checkout -B "$sync_branch" "origin/$branch"
-          git merge --no-edit "upstream/${{ env.UPSTREAM_BRANCH }}" || {
-            echo "Merge failed - conflicts exist"
-            exit 1
-          }
-          git push origin "$sync_branch"
-          echo "SYNC_BRANCH=$sync_branch" >> "$GITHUB_ENV"
+          if git merge --no-edit "upstream/${{ env.UPSTREAM_BRANCH }}"; then
+            git push origin "$sync_branch"
+            echo "SYNC_BRANCH=$sync_branch" >> "$GITHUB_ENV"
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort || true
+            echo "::notice::Upstream changes conflict with this fork's customizations; skipping automatic sync PR. Reconcile manually when ready."
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Open pull request
-        if: steps.ff.outputs.mode == 'pr'
+        if: steps.ff.outputs.mode == 'pr' && steps.prep.outputs.merged == 'true'
         uses: actions/github-script@v7
         with:
           script: |

@@ -1,6 +1,11 @@
 name: Publish
 on:
   workflow_dispatch:
+    inputs:
+      publish_registry:
+        description: 'Also publish to the MCP registry (normally runs on releases only)'
+        type: boolean
+        default: false
   schedule:
     # Nightly canary. Gated on the NPM_CANARY_ENABLED repo variable (see job if-condition):
     # set it to 'true' once npm trusted publishing is configured for @toxicwind/playwright-mcp.
@@ -78,7 +83,8 @@ jobs:
     # is skipped — the always() + result check lets this job still run).
     if: |
       always() &&
-      (github.event_name == 'release' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name == 'release' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish_registry)) &&
       needs.publish-mcp-release-npm.result != 'failure' &&
       needs.publish-mcp-release-npm.result != 'cancelled'
     needs: publish-mcp-release-npm
