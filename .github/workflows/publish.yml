@@ -2,20 +2,25 @@ name: Publish
 on:
   workflow_dispatch:
   schedule:
+    # Nightly canary. Gated on the NPM_CANARY_ENABLED repo variable (see job if-condition):
+    # set it to 'true' once npm trusted publishing is configured for @toxicwind/playwright-mcp.
     - cron: '0 8 * * *'
   release:
     types: [published]
 
 jobs:
   publish-mcp-canary-npm:
-    if: github.event.schedule || github.event_name == 'workflow_dispatch'
+    # npm OIDC trusted publishing requires one-time setup on npmjs.com for
+    # @toxicwind/playwright-mcp. Until the NPM_CANARY_ENABLED repo variable is
+    # 'true', scheduled/dispatch runs skip instead of failing on 403.
+    if: (github.event_name == 'workflow_dispatch' || github.event.schedule) && vars.NPM_CANARY_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write  # Required for OIDC npm publishing
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
@@ -36,19 +41,15 @@ jobs:
         run: echo "version=${{ steps.version.outputs.version }}-alpha-${{ steps.date.outputs.date }}" >> $GITHUB_OUTPUT
 
       - name: Update package.json version
-        run: |
-          npm version ${{ steps.canary-version.outputs.version }} --no-git-tag-version
-        working-directory: ./packages/playwright-mcp
+        run: npm version ${{ steps.canary-version.outputs.version }} --no-git-tag-version
 
       - run: npm ci
       - run: npx playwright install --with-deps
       - run: npm run lint
       - run: npm run ctest
-        working-directory: ./packages/playwright-mcp
 
       - name: Publish to npm with next tag
         run: npm publish --tag next
-        working-directory: ./packages/playwright-mcp
 
   publish-mcp-release-npm:
     if: github.event_name == 'release'
@@ -57,8 +58,8 @@ jobs:
       contents: read
       id-token: write  # Required for OIDC npm publishing
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
@@ -69,84 +70,51 @@ jobs:
       - run: npx playwright install --with-deps
       - run: npm run lint
       - run: npm run ctest
-        working-directory: ./packages/playwright-mcp
       - run: npm publish
-        working-directory: ./packages/playwright-mcp
 
-  publish-mcp-release-docker:
-    if: github.event_name == 'release'
+  publish-mcp-release-registry:
+    # Runs on release (after npm publish succeeds) or via manual workflow_dispatch
+    # (e.g. to retroactively publish a version, in which case publish-mcp-release-npm
+    # is skipped — the always() + result check lets this job still run).
+    if: |
+      always() &&
+      (github.event_name == 'release' || github.event_name == 'workflow_dispatch') &&
+      needs.publish-mcp-release-npm.result != 'failure' &&
+      needs.publish-mcp-release-npm.result != 'cancelled'
+    needs: publish-mcp-release-npm
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # Needed for OIDC login to Azure
-    environment: allow-publishing-docker-to-acr
+      id-token: write  # Required for GitHub OIDC auth to the MCP Registry
     steps:
-      - uses: actions/checkout@v5
-      - name: Set up QEMU # Needed for multi-platform builds (e.g., arm64 on amd64 runner)
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx # Needed for multi-platform builds
-        uses: docker/setup-buildx-action@v3
-      - name: Azure Login via OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_DOCKER_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_DOCKER_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_DOCKER_SUBSCRIPTION_ID }}
-      - name: Login to ACR
-        run: az acr login --name playwright
-      - name: Build and push Docker image
-        id: build-push
-        uses: docker/build-push-action@v6
-        with:
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            playwright.azurecr.io/public/playwright/mcp:${{ github.event.release.tag_name }}
-            playwright.azurecr.io/public/playwright/mcp:latest
-      - uses: oras-project/setup-oras@v1
-      - name: Set oras tags
-        run: |
-          attach_eol_manifest() {
-            local image="$1"
-            local today=$(date -u +'%Y-%m-%d')
-            # oras is re-using Docker credentials, so we don't need to login.
-            # Following the advice in https://portal.microsofticm.com/imp/v3/incidents/incident/476783820/summary
-            oras attach --artifact-type application/vnd.microsoft.artifact.lifecycle --annotation "vnd.microsoft.artifact.lifecycle.end-of-life.date=$today" $image
-          }
-          # for each tag, attach the eol manifest
-          for tag in $(echo ${{ steps.build-push.outputs.metadata['image.name'] }} | tr ',' '\n'); do
-            attach_eol_manifest $tag
-          done
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-  package-release-extension:
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # Needed to upload release assets
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: 'npm'
-      - name: Install extension dependencies
-        run: npm ci
-      - name: Build extension
-        working-directory: ./packages/extension
-        run: npm run build
-      - name: Get extension version
-        id: get-version
-        working-directory: ./packages/extension
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      - name: Package extension
-        working-directory: ./packages/extension
+      - name: Validate server.json version matches package.json
         run: |
-          cd dist
-          zip -r ../playwright-mcp-extension-${{ steps.get-version.outputs.version }}.zip .
-          cd ..
-      - name: Upload extension to release
-        env:
-           GITHUB_TOKEN: ${{ github.token }}
+          node -e "
+            const pkg = require('./package.json');
+            const server = require('./server.json');
+            const mismatches = [];
+            if (server.version !== pkg.version)
+              mismatches.push(\`server.version=\${server.version} != package.version=\${pkg.version}\`);
+            for (const p of server.packages) {
+              if (p.version !== pkg.version)
+                mismatches.push(\`packages[\${p.identifier}].version=\${p.version} != package.version=\${pkg.version}\`);
+            }
+            if (mismatches.length) {
+              console.error('server.json is out of sync with package.json:');
+              for (const m of mismatches) console.error('  ' + m);
+              process.exit(1);
+            }
+          "
+
+      - name: Install mcp-publisher
         run: |
-            gh release upload ${{github.event.release.tag_name}} ./packages/extension/playwright-mcp-extension-${{ steps.get-version.outputs.version }}.zip
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+
+      - name: Authenticate with MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

@@ -4,7 +4,7 @@
 # can drive it with full structured tools (snapshots, exact clicks, evaluate, etc.)
 #
 # This is the Firefox equivalent of:
-#   npx @playwright/mcp --cdp-endpoint ws://...   for Chromium
+#   npx @toxicwind/playwright-mcp --cdp-endpoint ws://...   for Chromium
 #
 # Usage:
 #   ./launch-firefox-from-profile.sh [optional /path/to/firefox/profile]
