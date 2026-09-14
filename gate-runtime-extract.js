@@ -1,3 +1,6 @@
+// NOTE: the CDP token below ('sovereign-browserless-2026-change-me') is a
+// PLACEHOLDER, not a live credential. Override it via the CDP_ENDPOINT
+// environment variable with your real pool endpoint/token.
 // Primary pattern source: toxicwind/github-advanced-search-mcp packages/github-client (retry, supplemental when low yield) + stress_test (no blind sleep, waits)
 // This version: keep the repo backoff for page, add supplemental OpenFang API call if page load fails (to keep producing real agent data for P1).
 

@@ -1,3 +1,4 @@
+<!-- FORK-PREAMBLE-START -->
 ## Playwright MCP
 
 > Fork note: this fork is maintained at `toxicwind/playwright-mcp` for a headed rebrowser workflow.
@@ -8,6 +9,29 @@
 > - Codex/Apex/OpenClaw operator workflows
 >
 > Upstream remains the source of truth for the base server. This fork adds local operator ergonomics and auto-syncs from upstream `main`.
+
+### Install
+
+`@toxicwind/playwright-mcp` is **not on the npm registry yet** — npm trusted
+publishing is not configured (the nightly canary job in
+`.github/workflows/publish.yml` is gated on the `NPM_CANARY_ENABLED` repo
+variable). Until publishing is enabled, `npx @toxicwind/playwright-mcp@latest`
+returns 404. Install from git instead:
+
+```bash
+# zero-install: runs straight from GitHub (verified working)
+npx -y github:toxicwind/playwright-mcp --help
+
+# or clone for local development / config-file use
+git clone https://github.com/toxicwind/playwright-mcp.git
+cd playwright-mcp
+npm install
+node cli.js --help
+```
+
+Every `npx` example in this README uses the `github:toxicwind/playwright-mcp`
+form so it works today. Once npm publishing is enabled,
+`@toxicwind/playwright-mcp@latest` will work as a drop-in replacement.
 
 ### Fork-specific workflow
 
@@ -22,7 +46,7 @@ Primary local model:
 Example:
 
 ```bash
-npx @toxicwind/playwright-mcp@latest \
+npx -y github:toxicwind/playwright-mcp \
   --cdp-endpoint http://127.0.0.1:46677 \
   --caps vision,devtools
 ```
@@ -34,7 +58,7 @@ Codex config example:
 command = "npx"
 args = [
   "-y",
-  "@toxicwind/playwright-mcp@latest",
+  "github:toxicwind/playwright-mcp",
   "--cdp-endpoint",
   "http://127.0.0.1:46677",
   "--caps",
@@ -54,10 +78,22 @@ Firefox does **not** have a CDP equivalent (CDP is Chromium-only). However this 
 
 1. Start a dedicated controllable headed Firefox (one time or per session):
    ```bash
-   cd sovereign-maximal/mcp-forks/playwright-mcp
+   git clone https://github.com/toxicwind/playwright-mcp.git
+   cd playwright-mcp
+   npm install   # once
    node launch-firefox-remote.js
    ```
    This prints a `ws://...` endpoint and keeps a real headed Firefox window open.
+
+   Prefer your real daily profile instead of a throwaway one? Use the helper:
+   ```bash
+   ./launch-firefox-from-profile.sh        # auto-detects your default profile
+   ./launch-firefox-from-profile.sh /path/to/firefox/xxxxx.default-release
+   ```
+   It gently closes Firefox instances on that profile, relaunches it headed
+   under Playwright's `launchServer`, and prints the `ws://...` endpoint.
+   (It will kill your running Firefox on that profile — session restore
+   usually brings your tabs back, but save work first.)
 
 2. Point the MCP server at it (in a separate terminal or via your MCP client config):
    ```bash
@@ -75,7 +111,9 @@ Firefox does **not** have a CDP equivalent (CDP is Chromium-only). However this 
 
 3. (Optional but powerful) Use a persistent profile you pre-logged into GitHub / your tools:
    - Close your normal Firefox (or use a different profile).
-   - Point `launch-firefox-remote.js` at your real profile dir (edit the script or set `FIREFOX_AGENT_PROFILE`).
+   - Point `launch-firefox-remote.js` at your real profile dir via the
+     `FIREFOX_AGENT_PROFILE` env var — or just run
+     `./launch-firefox-from-profile.sh`, which does this for you.
    - The agent now sees your real cookies, logins, tabs, extensions, etc.
 
 You can also use `--bidi-endpoint` for raw WebDriver BiDi endpoints if you have a stock Firefox listening on one (advanced, less reliable than the `launchServer` path above).
@@ -86,7 +124,7 @@ In your `.grok/config.toml` or Codex/etc config you can now do:
 [mcp_servers.sovereign-playwright-fork]
 command = "node"
 args = [
-  "/home/toxic/sovereign-maximal/mcp-forks/playwright-mcp/sovereign-launch.js",
+  "/path/to/playwright-mcp/sovereign-launch.js",
   "--browser", "firefox",
   "--remote-endpoint", "ws://127.0.0.1:THE_PORT"
 ]
@@ -107,6 +145,23 @@ git checkout main
 git merge --ff-only upstream/main
 git push origin main
 ```
+
+After any sync that touches `README.md`, re-apply this fork's additions:
+
+```bash
+node apply-fork-preamble.js  # restores the fork preamble (this section) at the top of README.md
+node update-readme.js         # regenerates the tools/options/config reference sections
+```
+
+How it works: the canonical fork preamble lives in `.github/fork-preamble.md`.
+`apply-fork-preamble.js` inserts it at the top of `README.md` between
+`<!-- FORK-PREAMBLE-START -->` / `<!-- FORK-PREAMBLE-END -->` markers
+(idempotent — safe to run any time). `update-readme.js` (upstream's generator, also wired as `npm run lint`)
+regenerates the marked tools/options/config sections from the installed
+`playwright-core` bundle and `config.d.ts`. The publish workflow runs both
+scripts and then fails the job on any `README.md` drift, so a stale README
+blocks publish instead of shipping.
+<!-- FORK-PREAMBLE-END -->
 
 A Model Context Protocol (MCP) server that provides browser automation capabilities using [Playwright](https://playwright.dev). This server enables LLMs to interact with web pages through structured accessibility snapshots, bypassing the need for screenshots or visually-tuned models.
 
@@ -145,14 +200,14 @@ First, install the Playwright MCP server with your client.
     "playwright": {
       "command": "npx",
       "args": [
-        "@toxicwind/playwright-mcp@latest"
+        "-y", "github:toxicwind/playwright-mcp"
       ]
     }
   }
 }
 ```
 
-[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D) [<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D)
+[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522github%253Atoxicwind%252Fplaywright-mcp%2522%255D%257D) [<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522github%253Atoxicwind%252Fplaywright-mcp%2522%255D%257D)
 
 <details>
 <summary>Amp</summary>
@@ -164,7 +219,7 @@ Add via the Amp VS Code extension settings screen or by updating your settings.j
   "playwright": {
     "command": "npx",
     "args": [
-      "@toxicwind/playwright-mcp@latest"
+      "-y", "github:toxicwind/playwright-mcp"
     ]
   }
 }
@@ -175,7 +230,7 @@ Add via the Amp VS Code extension settings screen or by updating your settings.j
 Add via the `amp mcp add` command below
 
 ```bash
-amp mcp add playwright -- npx @toxicwind/playwright-mcp@latest
+amp mcp add playwright -- npx -y github:toxicwind/playwright-mcp
 ```
 
 </details>
@@ -191,7 +246,7 @@ Add via the Antigravity settings or by updating your configuration file:
     "playwright": {
       "command": "npx",
       "args": [
-        "@toxicwind/playwright-mcp@latest"
+        "-y", "github:toxicwind/playwright-mcp"
       ]
     }
   }
@@ -206,7 +261,7 @@ Add via the Antigravity settings or by updating your configuration file:
 Use the Claude Code CLI to add the Playwright MCP server:
 
 ```bash
-claude mcp add playwright npx @toxicwind/playwright-mcp@latest
+claude mcp add playwright npx -y github:toxicwind/playwright-mcp
 ```
 </details>
 
@@ -235,7 +290,7 @@ Add the following to your [`cline_mcp_settings.json`](https://docs.cline.bot/mcp
       "timeout": 30,
       "args": [
         "-y",
-        "@toxicwind/playwright-mcp@latest"
+        "github:toxicwind/playwright-mcp"
       ],
       "disabled": false
     }
@@ -251,7 +306,7 @@ Add the following to your [`cline_mcp_settings.json`](https://docs.cline.bot/mcp
 Use the Codex CLI to add the Playwright MCP server:
 
 ```bash
-codex mcp add playwright npx "@toxicwind/playwright-mcp@latest"
+codex mcp add playwright npx -y "github:toxicwind/playwright-mcp"
 ```
 
 Alternatively, create or edit the configuration file `~/.codex/config.toml` and add:
@@ -259,7 +314,7 @@ Alternatively, create or edit the configuration file `~/.codex/config.toml` and 
 ```toml
 [mcp_servers.playwright]
 command = "npx"
-args = ["@toxicwind/playwright-mcp@latest"]
+args = ["-y", "github:toxicwind/playwright-mcp"]
 ```
 
 For more information, see the [Codex MCP documentation](https://github.com/openai/codex/blob/main/codex-rs/config.md#mcp_servers).
@@ -287,7 +342,7 @@ Alternatively, create or edit the configuration file `~/.copilot/mcp-config.json
         "*"
       ],
       "args": [
-        "@toxicwind/playwright-mcp@latest"
+        "-y", "github:toxicwind/playwright-mcp"
       ]
     }
   }
@@ -307,7 +362,7 @@ For more information, see the [Copilot CLI documentation](https://docs.github.co
 
 #### Or install manually:
 
-Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, use `command` type with the command `npx @toxicwind/playwright-mcp@latest`. You can also verify config or add command like arguments via clicking `Edit`.
+Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, use `command` type with the command `npx -y github:toxicwind/playwright-mcp`. You can also verify config or add command like arguments via clicking `Edit`.
 
 </details>
 
@@ -317,7 +372,7 @@ Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, u
 Use the Factory CLI to add the Playwright MCP server:
 
 ```bash
-droid mcp add playwright "npx @toxicwind/playwright-mcp@latest"
+droid mcp add playwright "npx -y github:toxicwind/playwright-mcp"
 ```
 
 Alternatively, type `/mcp` within Factory droid to open an interactive UI for managing MCP servers.
@@ -351,7 +406,7 @@ Go to `Advanced settings` -> `Extensions` -> `Add custom extension`. Name to you
 Use the Grok CLI to add the Playwright MCP server:
 
 ```bash
-grok mcp add playwright -- npx @toxicwind/playwright-mcp@latest
+grok mcp add playwright -- npx -y github:toxicwind/playwright-mcp
 ```
 
 Alternatively, create or edit the configuration file `~/.grok/config.toml` and add:
@@ -359,7 +414,7 @@ Alternatively, create or edit the configuration file `~/.grok/config.toml` and a
 ```toml
 [mcp_servers.playwright]
 command = "npx"
-args = ["@toxicwind/playwright-mcp@latest"]
+args = ["-y", "github:toxicwind/playwright-mcp"]
 ```
 
 For more information, see the [Grok MCP documentation](https://docs.x.ai/build/features/mcp-servers).
@@ -384,7 +439,7 @@ Alternatively, add to `.junie/mcp/mcp.json`:
       "command": "npx",
       "args": [
         "-y",
-        "@toxicwind/playwright-mcp@latest"
+        "github:toxicwind/playwright-mcp"
       ]
     }
   }
@@ -398,7 +453,7 @@ For more information, see the [Junie MCP configuration documentation](https://ju
 <details>
 <summary>Kiro</summary>
 
-[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=playwright&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22%40playwright%2Fmcp%40latest%22%5D%7D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=playwright&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22github%3Atoxicwind%2Fplaywright-mcp%22%5D%7D)
 
 Follow the MCP Servers [documentation](https://kiro.dev/docs/mcp/). For example in `.kiro/settings/mcp.json`:
 
@@ -408,7 +463,7 @@ Follow the MCP Servers [documentation](https://kiro.dev/docs/mcp/). For example 
     "playwright": {
       "command": "npx",
       "args": [
-        "@toxicwind/playwright-mcp@latest"
+        "-y", "github:toxicwind/playwright-mcp"
       ]
     }
   }
@@ -441,7 +496,7 @@ Follow the MCP Servers [documentation](https://opencode.ai/docs/mcp-servers/). F
       "type": "local",
       "command": [
         "npx",
-        "@toxicwind/playwright-mcp@latest"
+        "-y", "github:toxicwind/playwright-mcp"
       ],
       "enabled": true
     }
@@ -464,7 +519,7 @@ Click <code>Save</code>.
 
 #### Click the button to install:
 
-[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D) [<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D)
+[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522github%253Atoxicwind%252Fplaywright-mcp%2522%255D%257D) [<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522github%253Atoxicwind%252Fplaywright-mcp%2522%255D%257D)
 
 #### Or install manually:
 
@@ -472,7 +527,7 @@ Follow the MCP install [guide](https://code.visualstudio.com/docs/copilot/chat/m
 
 ```bash
 # For VS Code
-code --add-mcp '{"name":"playwright","command":"npx","args":["@toxicwind/playwright-mcp@latest"]}'
+code --add-mcp '{"name":"playwright","command":"npx","args":["-y", "github:toxicwind/playwright-mcp"]}'
 ```
 
 After installation, the Playwright MCP server will be available for use with your GitHub Copilot agent in VS Code.
@@ -490,7 +545,7 @@ Alternatively, use the slash command `/add-mcp` in the Warp prompt and paste the
     "playwright": {
       "command": "npx",
       "args": [
-        "@toxicwind/playwright-mcp@latest"
+        "-y", "github:toxicwind/playwright-mcp"
       ]
     }
   }
@@ -601,7 +656,7 @@ state [here](https://playwright.dev/docs/auth).
     "playwright": {
       "command": "npx",
       "args": [
-        "@toxicwind/playwright-mcp@latest",
+        "-y", "github:toxicwind/playwright-mcp",
         "--isolated",
         "--storage-state={path/to/storage.json}"
       ]
@@ -649,7 +704,7 @@ The Playwright MCP server can be configured using a JSON configuration file. You
 using the `--config` command line option:
 
 ```bash
-npx @toxicwind/playwright-mcp@latest --config path/to/config.json
+npx -y github:toxicwind/playwright-mcp --config path/to/config.json
 ```
 
 <details>
@@ -894,7 +949,7 @@ When running headed browser on system w/o display or from worker processes of th
 run the MCP server from environment with the DISPLAY and pass the `--port` flag to enable HTTP transport.
 
 ```bash
-npx @toxicwind/playwright-mcp@latest --port 8931
+npx -y github:toxicwind/playwright-mcp --port 8931
 ```
 
 And then in MCP client config, set the `url` to the HTTP endpoint:

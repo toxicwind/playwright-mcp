@@ -51,6 +51,9 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps
       - run: npm run lint
+      - run: node apply-fork-preamble.js
+      - name: README matches generated content
+        run: git diff --exit-code -- README.md
       - run: npm run ctest
 
       - name: Publish to npm with next tag
@@ -74,6 +77,9 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps
       - run: npm run lint
+      - run: node apply-fork-preamble.js
+      - name: README matches generated content
+        run: git diff --exit-code -- README.md
       - run: npm run ctest
       - run: npm publish
 
