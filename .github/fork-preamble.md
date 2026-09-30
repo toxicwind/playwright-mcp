@@ -1,162 +1,72 @@
 ## Playwright MCP
 
-> Fork note: this fork is maintained at `toxicwind/playwright-mcp` for a headed rebrowser workflow.
-> The current direction is: keep upstream compatibility, but optimize local operator flows around:
-> - persistent headed Chromium sessions
-> - CDP attach to already-running browser windows
-> - rebrowser-friendly launch and session reuse
-> - Codex/Apex/OpenClaw operator workflows
->
-> Upstream remains the source of truth for the base server. This fork adds local operator ergonomics and auto-syncs from upstream `main`.
+<div align="right">
 
-### Install
+![node >= 18](https://img.shields.io/badge/node-%3E%3D18-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![headed rebrowser](https://img.shields.io/badge/headed-rebrowser-2EAD33?style=for-the-badge&logo=playwright&logoColor=white)
+![upstream sync](https://img.shields.io/badge/upstream-auto--sync-398CCB?style=for-the-badge)
+[![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-yellow?style=for-the-badge)](LICENSE)
 
-`@toxicwind/playwright-mcp` is **not on the npm registry yet** — npm trusted
-publishing is not configured (the nightly canary job in
-`.github/workflows/publish.yml` is gated on the `NPM_CANARY_ENABLED` repo
-variable). Until publishing is enabled, `npx @toxicwind/playwright-mcp@latest`
-returns 404. Install from git instead:
+</div>
+
+> Fork note: this fork is maintained at `toxicwind/playwright-mcp` for a headed rebrowser workflow. Upstream remains the source of truth for the base server — this fork adds local operator ergonomics and auto-syncs from upstream `main`.
+
+## Why should you care?
+
+Stock Playwright MCP boots a fresh, isolated, throwaway browser every time — fine for CI, wrong for an operator. This fork is built around the opposite model: **one persistent headed Chromium you actually use, with your real logged-in profile and tabs**, and the MCP server attaches to it over CDP. No re-authing inside automation contexts, no losing your session between tool calls. Built for Codex / Apex / OpenClaw operator workflows where the browser is a workspace, not a sandbox.
+
+**License:** [Apache-2.0](LICENSE) · **Security:** [SECURITY.md](SECURITY.md)
+
+## Fork features
+
+- **Persistent headed Chromium sessions** — the browser stays yours between calls
+- **CDP attach to already-running windows** — `--cdp-endpoint` targets a live browser with remote debugging enabled
+- **Rebrowser-friendly launch and session reuse** — real profiles, real tabs, real logins
+- **Upstream-compatible** — base server tracks upstream `main` via auto-sync; fork preamble re-applies cleanly with `node apply-fork-preamble.js`
+- **Fork-local launch helpers** — `sovereign-launch.js`, `launch-firefox-from-profile.sh`, `launch-firefox-remote.js`, `gate-runtime-extract.js`
+
+## How it works
+
+```mermaid
+flowchart LR
+    B[headed Chromium<br/>your profile, your tabs] -->|remote debugging| CDP[CDP endpoint]
+    CDP -->|attach| MCP[playwright-mcp server]
+    MCP -->|tools: vision, devtools, …| A[agent<br/>Codex / Apex / OpenClaw]
+```
+
+## Quick start
 
 ```bash
-# zero-install: runs straight from GitHub (verified working)
 npx -y github:toxicwind/playwright-mcp --help
-
-# or clone for local development / config-file use
-git clone https://github.com/toxicwind/playwright-mcp.git
-cd playwright-mcp
-npm install
-node cli.js --help
+npx -y github:toxicwind/playwright-mcp --cdp-endpoint http://127.0.0.1:46677 --caps vision,devtools
 ```
 
-Every `npx` example in this README uses the `github:toxicwind/playwright-mcp`
-form so it works today. Once npm publishing is enabled,
-`@toxicwind/playwright-mcp@latest` will work as a drop-in replacement.
+(`@toxicwind/playwright-mcp` is **not on the npm registry yet** — trusted publishing is gated on the `NPM_CANARY_ENABLED` repo variable, so `npx @toxicwind/playwright-mcp@latest` 404s. The `github:` form above works today and becomes a drop-in replacement later.)
 
-### Fork-specific workflow
-
-This fork is intended to work well with a live headed browser instead of always booting a fresh isolated instance.
-
-Primary local model:
-
-1. Start a headed rebrowser/Chromium session with remote debugging enabled.
-2. Point Playwright MCP at that browser with `--cdp-endpoint`.
-3. Reuse the real logged-in profile and tabs instead of reauthing inside a throwaway automation context.
-
-Example:
-
-```bash
-npx -y github:toxicwind/playwright-mcp \
-  --cdp-endpoint http://127.0.0.1:46677 \
-  --caps vision,devtools
-```
-
-Codex config example:
+Local model: start a headed Chromium with remote debugging, point the server at it with `--cdp-endpoint`, reuse the real logged-in profile instead of reauthing in a throwaway context. Codex config example:
 
 ```toml
 [mcp_servers.playwright]
 command = "npx"
 args = [
-  "-y",
-  "github:toxicwind/playwright-mcp",
-  "--cdp-endpoint",
-  "http://127.0.0.1:46677",
-  "--caps",
-  "vision,devtools"
+  "-y", "github:toxicwind/playwright-mcp",
+  "--cdp-endpoint", "http://127.0.0.1:46677",
+  "--caps", "vision,devtools",
 ]
 ```
 
-If you prefer the browser-extension bridge instead of CDP, the upstream extension mode remains supported. This fork does not remove that path.
-
-### Firefox live control ("CDP-like" for Firefox)
-
-Chromium has the beautiful `--cdp-endpoint` story for attaching to your already-running browser.
-
-Firefox does **not** have a CDP equivalent (CDP is Chromium-only). However this fork adds first-class support for the practical equivalent:
-
-**Recommended pattern (most reliable "live Firefox" experience):**
-
-1. Start a dedicated controllable headed Firefox (one time or per session):
-   ```bash
-   git clone https://github.com/toxicwind/playwright-mcp.git
-   cd playwright-mcp
-   npm install   # once
-   node launch-firefox-remote.js
-   ```
-   This prints a `ws://...` endpoint and keeps a real headed Firefox window open.
-
-   Prefer your real daily profile instead of a throwaway one? Use the helper:
-   ```bash
-   ./launch-firefox-from-profile.sh        # auto-detects your default profile
-   ./launch-firefox-from-profile.sh /path/to/firefox/xxxxx.default-release
-   ```
-   It gently closes Firefox instances on that profile, relaunches it headed
-   under Playwright's `launchServer`, and prints the `ws://...` endpoint.
-   (It will kill your running Firefox on that profile — session restore
-   usually brings your tabs back, but save work first.)
-
-2. Point the MCP server at it (in a separate terminal or via your MCP client config):
-   ```bash
-   PLAYWRIGHT_MCP_BROWSER=firefox \
-   PLAYWRIGHT_MCP_REMOTE_ENDPOINT=ws://127.0.0.1:PORT \
-     node sovereign-launch.js
-   ```
-
-   Or with flags:
-   ```bash
-   node sovereign-launch.js \
-     --browser firefox \
-     --remote-endpoint ws://127.0.0.1:PORT
-   ```
-
-3. (Optional but powerful) Use a persistent profile you pre-logged into GitHub / your tools:
-   - Close your normal Firefox (or use a different profile).
-   - Point `launch-firefox-remote.js` at your real profile dir via the
-     `FIREFOX_AGENT_PROFILE` env var — or just run
-     `./launch-firefox-from-profile.sh`, which does this for you.
-   - The agent now sees your real cookies, logins, tabs, extensions, etc.
-
-You can also use `--bidi-endpoint` for raw WebDriver BiDi endpoints if you have a stock Firefox listening on one (advanced, less reliable than the `launchServer` path above).
-
-In your `.grok/config.toml` or Codex/etc config you can now do:
-
-```toml
-[mcp_servers.sovereign-playwright-fork]
-command = "node"
-args = [
-  "/path/to/playwright-mcp/sovereign-launch.js",
-  "--browser", "firefox",
-  "--remote-endpoint", "ws://127.0.0.1:THE_PORT"
-]
-```
-
-This is the closest thing to "live control my currently running Firefox" that exists in the Playwright ecosystem today.
-
-### Upstream sync policy
-
-This repository includes a GitHub Actions workflow that keeps `main` aligned with `microsoft/playwright-mcp` by fast-forwarding from upstream when possible.
-
-Manual sync:
+## Dev
 
 ```bash
-git remote add upstream https://github.com/microsoft/playwright-mcp.git
-git fetch upstream
-git checkout main
-git merge --ff-only upstream/main
-git push origin main
+git clone https://github.com/toxicwind/playwright-mcp.git
+cd playwright-mcp && npm install && node cli.js --help
 ```
 
-After any sync that touches `README.md`, re-apply this fork's additions:
+- `node apply-fork-preamble.js` — re-applies this preamble to `README.md` after an upstream sync (idempotent; canonical source is `.github/fork-preamble.md`)
+- `node update-readme.js` — README lint (`npm run lint`)
+- `node roll.js` — upstream roll helper (`npm run roll`)
+- Tests: `playwright test` (`--project=chrome|firefox|webkit|chromium-docker`)
 
-```bash
-node apply-fork-preamble.js  # restores the fork preamble (this section) at the top of README.md
-node update-readme.js         # regenerates the tools/options/config reference sections
-```
+## License & security
 
-How it works: the canonical fork preamble lives in `.github/fork-preamble.md`.
-`apply-fork-preamble.js` inserts it at the top of `README.md` between
-`<!-- FORK-PREAMBLE-START -->` / `<!-- FORK-PREAMBLE-END -->` markers
-(idempotent — safe to run any time). `update-readme.js` (upstream's generator, also wired as `npm run lint`)
-regenerates the marked tools/options/config sections from the installed
-`playwright-core` bundle and `config.d.ts`. The publish workflow runs both
-scripts and then fails the job on any `README.md` drift, so a stale README
-blocks publish instead of shipping.
+[Apache-2.0](LICENSE) (Microsoft Corporation, upstream; fork changes under the same license). Security policy: [SECURITY.md](SECURITY.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
